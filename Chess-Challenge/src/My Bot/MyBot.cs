@@ -72,9 +72,7 @@ public class MyBot : IChessBot
 
         return check;
     }
-
-    bool MoveWouldRepeat(Move move, Board board) => CheckMoveWithTest(move, board, (b, _) => b.IsRepeatedPosition());
-
+    
     bool MoveWouldLoseQueen(Move move, Board board)
     {
         board.MakeMove(move);
@@ -84,6 +82,8 @@ public class MyBot : IChessBot
         // var result = CheckMoveWithTest(move, board, Test);
         return test;
     }
+
+    bool MoveWouldStaleMate(Move move, Board board) => CheckMoveWithTest(move, board, (b, _) => b.IsDraw() || b.IsRepeatedPosition());
         
     
     Move OneMoveSearch(Board board, Move[] moves)
@@ -131,10 +131,9 @@ public class MyBot : IChessBot
 
     public Move Think(Board board, Timer timer)
     {
-        Move[] moves = board.GetLegalMoves().Where(m => !MoveWouldRepeat(m, board)).ToArray();
+        Move[] moves = board.GetLegalMoves().ToArray();
+        var movesNoStalemate = moves.Where(m => !MoveWouldStaleMate(m, board)).ToArray();
         
-        
-        
-        return OneMoveSearch(board, moves);
+        return OneMoveSearch(board, movesNoStalemate.Length > 0 ?  movesNoStalemate : moves);
     }
 }
