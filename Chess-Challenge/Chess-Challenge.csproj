@@ -2,11 +2,12 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net6.0</TargetFramework>
     <RootNamespace>Chess_Challenge</RootNamespace>
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
+    <TargetFramework>net7.0</TargetFramework>
+    <LangVersion>11</LangVersion>
   </PropertyGroup>
 
   <ItemGroup>
