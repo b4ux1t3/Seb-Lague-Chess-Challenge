@@ -99,7 +99,7 @@ public class MyBot : IChessBot
         
         var checks = 
             MovesWithChecks(moves, board)
-                .Where(t => !MoveHasBadTrade(t.Item1, board) && !MoveWouldLoseQueen(t.Item1, board))
+                .Where(t => !MoveHasBadTrade(t.Item1, board) && !WouldLosePieceNextTurn(t.Item1, board))
                 .ToArray();
         
         var checksCollapsed = 
