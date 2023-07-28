@@ -141,13 +141,25 @@ public class MyBot : IChessBot
             RandMove(moves);
         return !move.IsPromotion ? move : new Move($"{move.StartSquare.Name}{move.TargetSquare.Name}q", board);
     }
+
+    Move LowPieceCountMoves(Board board, Move[] moves)
+    {
+        var movesWithPawns = moves.Where(m => m.MovePieceType is PieceType.Pawn && !WouldLosePieceNextTurn(m, board)).ToArray();
+        var pawnCaps = movesWithPawns.Where(m => m.IsCapture).ToArray();
+        if (movesWithPawns.Length > 0)
+        {
+            return pawnCaps.Length > 0 ? HighestValue(pawnCaps) : RandMove(movesWithPawns);
+        }
+
+        return OneMoveSearch(board, moves);
+    }
     
 
     public Move Think(Board board, Timer timer)
     {
         Move[] moves = board.GetLegalMoves().ToArray();
-        var movesNoStalemate = moves.Where(m => !MoveWouldStaleMate(m, board) && !MoveWouldLeadToMate(m, board)).ToArray();
-        
-        return OneMoveSearch(board, movesNoStalemate.Length > 0 ?  movesNoStalemate : moves);
+        var movesNoMates = moves.Where(m => !MoveWouldStaleMate(m, board) && !MoveWouldLeadToMate(m, board)).ToArray();
+        var allPieces = board.GetAllPieceLists().Aggregate(0, (i, list) => i + list.Count());
+        return allPieces < 10 ? LowPieceCountMoves(board, movesNoMates.Length > 0 ? movesNoMates : moves) : OneMoveSearch(board, movesNoMates.Length > 0 ?  movesNoMates : moves);
     }
 }
