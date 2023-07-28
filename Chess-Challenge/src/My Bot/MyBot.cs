@@ -77,9 +77,12 @@ public class MyBot : IChessBot
 
     bool MoveWouldLoseQueen(Move move, Board board)
     {
-        bool Test(Board b, Move m) => DoMoveGetMovesRevertMove(m, b).Any(newMove => newMove is { IsCapture: true, CapturePieceType: PieceType.Queen });
-        var result = CheckMoveWithTest(move, board, Test);
-        return result;
+        board.MakeMove(move);
+        var test = board.GetLegalMoves(true).Any(m => m is { IsCapture: true, CapturePieceType: PieceType.Queen });
+        board.UndoMove(move);
+        // bool Test(Board b, Move m) => DoMoveGetMovesRevertMove(m, b).Any(newMove => newMove is { IsCapture: true, CapturePieceType: PieceType.Queen });
+        // var result = CheckMoveWithTest(move, board, Test);
+        return test;
     }
         
     
