@@ -46,7 +46,7 @@ public class MyBot : IChessBot
     {
         var pieceValue = _values[(int)move.CapturePieceType];
         var moves = DoMoveGetMovesRevertMove(move, board);
-        return moves.Any(t => _values[(int)t.CapturePieceType] > pieceValue);
+        return moves.Any(m => _values[(int)m.CapturePieceType] > pieceValue);
     }
     
     bool WouldLosePieceNextTurn(Move move, Board board)
@@ -63,21 +63,75 @@ public class MyBot : IChessBot
 
         return moves;
     }
-    public Move Think(Board board, Timer timer)
-    {
-        Move[] moves = board.GetLegalMoves();
-        // var noLossMoves = moves.Where(m => WouldLosePieceNextTurn(m, board)).ToArray();
-        var caps = MovesWithNoBadTrades(board.GetLegalMoves(true), board).ToArray();
-        var checks = MovesWithChecks(moves, board).ToArray();
-        var checksWithCaps = checks.Where(t => caps.Contains(t.Item1)).ToArray();
-        // We first want to check for mates
-        var moveMate = checks.FirstOrDefault(m => m.Item2);
 
-        var move = moveMate.Item1 != Move.NullMove ? moveMate.Item1 :
-            checksWithCaps.Length > 0 ? RandMove(checksWithCaps.Select(t => t.Item1)) :
+    bool CheckMoveWithTest(Move move, Board board, Func<Board, Move, bool> tester)
+    {
+        board.MakeMove(move);
+        var check = tester(board, move);
+        board.UndoMove(move);
+
+        return check;
+    }
+
+    bool MoveWouldRepeat(Move move, Board board) => CheckMoveWithTest(move, board, (b, _) => b.IsRepeatedPosition());
+
+    bool MoveWouldLoseQueen(Move move, Board board)
+    {
+        bool Test(Board b, Move m) => DoMoveGetMovesRevertMove(m, b).Any(newMove => newMove is { IsCapture: true, CapturePieceType: PieceType.Queen });
+        var result = CheckMoveWithTest(move, board, Test);
+        return result;
+    }
+        
+    
+    Move OneMoveSearch(Board board, Move[] moves)
+    {
+        var noLossMoves = 
+            moves
+                .Where(m => !WouldLosePieceNextTurn(m, board))
+                .ToArray();
+        
+        var caps = 
+            MovesWithNoBadTrades(board.GetLegalMoves(true), board)
+                .ToArray();
+        
+        var checks = 
+            MovesWithChecks(moves, board)
+                .Where(t => !MoveHasBadTrade(t.Item1, board) && !MoveWouldLoseQueen(t.Item1, board))
+                .ToArray();
+        
+        var checksCollapsed = 
+            checks
+                .Select(t => t.Item1)
+                .ToArray();
+        
+        var checksWithCaps = 
+            checks
+                .Where(t => caps.Contains(t.Item1))
+                .Select(t => t.Item1)
+                .ToArray();
+        
+        // We first want to check for mates
+        var movesWithMate = 
+            checks.Where(m => m.Item2)
+                .Select(m => m.Item1)
+                .ToArray();
+
+        var move = movesWithMate.Length > 0 ? movesWithMate[0] :
+            checksWithCaps.Length > 0 ? HighestValue(checksWithCaps) :
+            checksCollapsed.Length > 0 ? RandMove(checksCollapsed) :
             caps.Length > 0 ? HighestValue(caps) :
-            // noLossMoves.Length > 0 ? RandMove(noLossMoves) :
+            noLossMoves.Length > 0 ? RandMove(noLossMoves) :
             RandMove(moves);
         return !move.IsPromotion ? move : new Move($"{move.StartSquare.Name}{move.TargetSquare.Name}q", board);
+    }
+    
+
+    public Move Think(Board board, Timer timer)
+    {
+        Move[] moves = board.GetLegalMoves().Where(m => !MoveWouldRepeat(m, board)).ToArray();
+        
+        
+        
+        return OneMoveSearch(board, moves);
     }
 }
