@@ -83,6 +83,20 @@ public class MyBot : IChessBot
         return test;
     }
 
+    bool MoveWouldLeadToMate(Move move, Board board)
+    {
+        board.MakeMove(move);
+        var answer = board.GetLegalMoves(true).Any(m =>
+        {
+            board.MakeMove(m);
+            var result = board.IsInCheckmate();
+            board.UndoMove(m);
+            return result;
+        });
+        board.UndoMove(move);
+        return answer;
+    }
+
     bool MoveWouldStaleMate(Move move, Board board) => CheckMoveWithTest(move, board, (b, _) => b.IsDraw() || b.IsRepeatedPosition());
         
     
@@ -132,7 +146,7 @@ public class MyBot : IChessBot
     public Move Think(Board board, Timer timer)
     {
         Move[] moves = board.GetLegalMoves().ToArray();
-        var movesNoStalemate = moves.Where(m => !MoveWouldStaleMate(m, board)).ToArray();
+        var movesNoStalemate = moves.Where(m => !MoveWouldStaleMate(m, board) && !MoveWouldLeadToMate(m, board)).ToArray();
         
         return OneMoveSearch(board, movesNoStalemate.Length > 0 ?  movesNoStalemate : moves);
     }
