@@ -7,5 +7,5 @@ var message = string.Empty;
 while (message != "quit")
 {
     message = Console.ReadLine();
-    engine.ReceiveCommand(message ?? "INVALID");
+    if (!string.IsNullOrEmpty(message)) engine.ReceiveCommand(message);
 }

@@ -54,8 +54,8 @@ public class UciEngine
     public void ReceiveCommand(string message)
     {
         var messageType = message.Split(' ')[0];
-        WriteLineToDisk($"{DateTimeOffset.Now} -- Received message {message}", _logFile);
-        WriteLineToDisk($"{message}", _uciLog);
+        WriteLineToDisk($"{DateTimeOffset.Now.ToString(_dateFormat)} -- Received message {message}", _logFile);
+        WriteLineToDisk($"{DateTimeOffset.Now.ToString(_dateFormat)}{message}", _uciLog);
         try
         {
             switch (messageType)
@@ -67,7 +67,7 @@ public class UciEngine
                     Respond(ReadyOk);
                     break;
                 case NewGame:
-                    _uciLog = $"./{DateTimeOffset.Now.ToString(_dateFormat)}{_uciLog}";
+                    _uciLog = $"./{_uciLog}";
                     _currentBoard = new Board();
                     _currentBoard.LoadPosition(botMatchStartFens);
                     break;
@@ -78,7 +78,7 @@ public class UciEngine
                     ProcessGoCommand(message);
                     break;
                 case Stop:
-                    message = Quit;
+                    // message = Quit;
                     // ProcessStopCommand();
                     break;
                 case Quit:
@@ -109,8 +109,8 @@ public class UciEngine
     {
         var split = message.Split(' ');
         var millis = int.Parse(split[2]);
-        var newMove = _bot.Think(new(_currentBoard), new (millis));
-        var moveNameUci = MoveUtility.GetMoveNameUCI(newMove.move);
+        var newMove = new Move(_bot.Think(new(_currentBoard), new (millis)).RawValue);
+        var moveNameUci = MoveUtility.GetMoveNameUCI(newMove);
         Respond($"{BestMove} {moveNameUci}");
     }
 
@@ -125,11 +125,15 @@ public class UciEngine
         //     moves[i] = MoveUtility.GetMoveFromUCIName(str, _currentBoard);
         //     _currentBoard.MakeMove(moves[i], false);
         // }
-
-        var moveString = message.Split(' ')[^1];
-        if (moveString == "startpos") return; 
-        var newMove = MoveUtility.GetMoveFromUCIName(moveString, _currentBoard);
-        _currentBoard.MakeMove(newMove, false);
+        _currentBoard = new Board();
+        _currentBoard.LoadPosition(botMatchStartFens);
+        var moveStrings = message.Split(' ');
+        if (moveStrings[^1] == "startpos") return;
+        for (var i = 3; i < moveStrings.Length; i++)
+        {
+            var newMove = MoveUtility.GetMoveFromUCIName(moveStrings[i], _currentBoard);
+            _currentBoard.MakeMove(newMove, false);
+        }
     }
 
     private void Respond(string response)
