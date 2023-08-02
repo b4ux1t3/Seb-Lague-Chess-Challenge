@@ -7,7 +7,7 @@ public class MyBot : IChessBot
 {
     private int[] _values = { 0, 100, 250, 350, 500, 900, 1000 };
 
-    Move RandMove(Move[] moves) =>moves[moves.Length];
+    Move RandMove(Move[] moves) => moves[Random.Shared.Next(moves.Length)];
     
 
     Move HighestValue(IEnumerable<Move> moves) =>  moves.Aggregate(
@@ -134,12 +134,31 @@ public class MyBot : IChessBot
         var pawnCaps = movesWithPawns.Where(m => m.IsCapture).ToArray();
         if (movesWithPawns.Length > 0)
         {
-            return pawnCaps.Length > 0 ? HighestValue(pawnCaps) : RandMove(movesWithPawns);
+            return pawnCaps.Length > 0 ? HighestValue(pawnCaps) : OneMoveSearch(board, movesWithPawns, true);
         }
 
         return OneMoveSearch(board, moves, true);
     }
-    
+
+    private Move VeryEndGameMoves(Board board, Move[] moves)
+    {
+        var enemyKingSquare = board.GetKingSquare(!board.IsWhiteToMove);
+        var myKingSquare = board.GetKingSquare(board.IsWhiteToMove);
+        var kingMoves =
+            moves
+                .Where(m =>
+                    m.MovePieceType == PieceType.King 
+                    ||
+                     (myKingSquare.File < enemyKingSquare.File
+                         ? m.TargetSquare.File > myKingSquare.File
+                         : m.TargetSquare.File < myKingSquare.File) ||
+                     (myKingSquare.Rank < enemyKingSquare.Rank
+                         ? m.TargetSquare.Rank > myKingSquare.Rank
+                         : m.TargetSquare.Rank < myKingSquare.Rank))
+                .ToArray();
+
+        return OneMoveSearch(board, kingMoves.Length > 0 ? kingMoves : moves);
+    }
 
     public Move Think(Board board, Timer timer)
     {
@@ -149,30 +168,11 @@ public class MyBot : IChessBot
         var move = allPieces switch
         {
             > 10 => OneMoveSearch(board, movesNoMates.Length > 0 ? movesNoMates : moves),
-            > 3 => LowPieceCountMoves(board, movesNoMates.Length > 0 ? movesNoMates : moves),
+            > 5 => LowPieceCountMoves(board, movesNoMates.Length > 0 ? movesNoMates : moves),
             _ => VeryEndGameMoves(board, movesNoMates.Length > 0 ? movesNoMates : moves)
         };
         
         return !move.IsPromotion ? move : new Move($"{move.StartSquare.Name}{move.TargetSquare.Name}q", board);
     }
 
-    private Move VeryEndGameMoves(Board board, Move[] moves)
-    {
-        var enemyKingSquare = board.GetKingSquare(!board.IsWhiteToMove);
-        var myKingSquare = board.GetKingSquare(board.IsWhiteToMove);
-        var kingMoves = 
-            moves
-                .Where(m => 
-                    !WouldLosePieceNextTurn(m, board) &&
-                    (m.MovePieceType != PieceType.King ||
-                    (myKingSquare.File < enemyKingSquare.File 
-                         ? m.TargetSquare.File > myKingSquare.File 
-                         : m.TargetSquare.File < myKingSquare.File) || 
-                     (myKingSquare.Rank < enemyKingSquare.Rank 
-                         ? m.TargetSquare.Rank > myKingSquare.Rank 
-                         : m.TargetSquare.Rank < myKingSquare.Rank)))
-                .ToArray();
-
-        return RandMove(kingMoves.Length > 0 ? kingMoves : moves);
-    }
 }
