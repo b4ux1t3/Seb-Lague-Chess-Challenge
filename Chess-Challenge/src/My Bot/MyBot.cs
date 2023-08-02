@@ -7,11 +7,8 @@ public class MyBot : IChessBot
 {
     private int[] _values = { 0, 100, 250, 350, 500, 900, 1000 };
 
-    Move RandMove(IEnumerable<Move> moves)
-    {
-        var array = moves.ToArray();
-        return array[Random.Shared.Next(array.Length)];
-    }
+    Move RandMove(Move[] moves) => moves[Random.Shared.Next(moves.Length)];
+    
 
     Move HighestValue(IEnumerable<Move> moves) =>  moves.Aggregate(
         new Move(), 
@@ -42,18 +39,10 @@ public class MyBot : IChessBot
     // Same here
     (bool, bool) CheckForCheck(Board board) => (board.IsInCheck(), board.IsInCheckmate());
 
-    bool MoveHasBadTrade(Move move, Board board)
-    {
-        var pieceValue = _values[(int)move.CapturePieceType];
-        var moves = DoMoveGetMovesRevertMove(move, board);
-        return moves.Any(m => _values[(int)m.CapturePieceType] > pieceValue);
-    }
-    
-    bool WouldLosePieceNextTurn(Move move, Board board)
-    {
-        var moves = DoMoveGetMovesRevertMove(move, board, true);
-        return moves.Any(move1 => move1.TargetSquare == move.TargetSquare);
-    }
+    bool MoveHasBadTrade(Move move, Board board) => DoMoveGetMovesRevertMove(move, board).Any(m => _values[(int)m.CapturePieceType] > _values[(int)move.CapturePieceType]);
+
+    bool WouldLosePieceNextTurn(Move move, Board board) => DoMoveGetMovesRevertMove(move, board, true)
+        .Any(move1 => move1.TargetSquare == move.TargetSquare);
 
     Move[] DoMoveGetMovesRevertMove(Move move, Board board, bool capturesOnly = false)
     {
@@ -71,16 +60,6 @@ public class MyBot : IChessBot
         board.UndoMove(move);
 
         return check;
-    }
-    
-    bool MoveWouldLoseQueen(Move move, Board board)
-    {
-        board.MakeMove(move);
-        var test = board.GetLegalMoves(true).Any(m => m is { IsCapture: true, CapturePieceType: PieceType.Queen });
-        board.UndoMove(move);
-        // bool Test(Board b, Move m) => DoMoveGetMovesRevertMove(m, b).Any(newMove => newMove is { IsCapture: true, CapturePieceType: PieceType.Queen });
-        // var result = CheckMoveWithTest(move, board, Test);
-        return test;
     }
 
     bool MoveWouldLeadToMate(Move move, Board board)
@@ -100,10 +79,17 @@ public class MyBot : IChessBot
     bool MoveWouldStaleMate(Move move, Board board) => CheckMoveWithTest(move, board, (b, _) => b.IsDraw() || b.IsRepeatedPosition());
         
     
-    Move OneMoveSearch(Board board, Move[] moves)
+    Move OneMoveSearch(Board board, Move[] moves, bool lateGame = false)
     {
+        if (board.IsInCheck())
+        {
+            return RandMove(moves);
+        }
+        var noKingMoves =
+            lateGame ? moves : moves.Where(m => m.MovePieceType != PieceType.King || m.IsCastles).ToArray();
+
         var noLossMoves = 
-            moves
+            noKingMoves
                 .Where(m => !WouldLosePieceNextTurn(m, board))
                 .ToArray();
         
@@ -112,7 +98,7 @@ public class MyBot : IChessBot
                 .ToArray();
         
         var checks = 
-            MovesWithChecks(moves, board)
+            MovesWithChecks(noKingMoves, board)
                 .Where(t => !MoveHasBadTrade(t.Item1, board) && !WouldLosePieceNextTurn(t.Item1, board))
                 .ToArray();
         
@@ -123,8 +109,8 @@ public class MyBot : IChessBot
         
         var checksWithCaps = 
             checks
-                .Where(t => caps.Contains(t.Item1))
                 .Select(t => t.Item1)
+                .Where(t => caps.Contains(t))
                 .ToArray();
         
         // We first want to check for mates
@@ -133,13 +119,13 @@ public class MyBot : IChessBot
                 .Select(m => m.Item1)
                 .ToArray();
 
-        var move = movesWithMate.Length > 0 ? movesWithMate[0] :
+        return movesWithMate.Length > 0 ? movesWithMate[0] :
             checksWithCaps.Length > 0 ? HighestValue(checksWithCaps) :
-            checksCollapsed.Length > 0 ? RandMove(checksCollapsed) :
             caps.Length > 0 ? HighestValue(caps) :
+            checksCollapsed.Length > 0 ? RandMove(checksCollapsed) :
+            noKingMoves.Length > 0 ? RandMove(noKingMoves) :
             noLossMoves.Length > 0 ? RandMove(noLossMoves) :
             RandMove(moves);
-        return !move.IsPromotion ? move : new Move($"{move.StartSquare.Name}{move.TargetSquare.Name}q", board);
     }
 
     Move LowPieceCountMoves(Board board, Move[] moves)
@@ -148,18 +134,45 @@ public class MyBot : IChessBot
         var pawnCaps = movesWithPawns.Where(m => m.IsCapture).ToArray();
         if (movesWithPawns.Length > 0)
         {
-            return pawnCaps.Length > 0 ? HighestValue(pawnCaps) : RandMove(movesWithPawns);
+            return pawnCaps.Length > 0 ? HighestValue(pawnCaps) : OneMoveSearch(board, movesWithPawns, true);
         }
 
-        return OneMoveSearch(board, moves);
+        return OneMoveSearch(board, moves, true);
     }
-    
+
+    private Move VeryEndGameMoves(Board board, Move[] moves)
+    {
+        var enemyKingSquare = board.GetKingSquare(!board.IsWhiteToMove);
+        var myKingSquare = board.GetKingSquare(board.IsWhiteToMove);
+        var kingMoves =
+            moves
+                .Where(m =>
+                    m.MovePieceType == PieceType.King 
+                    ||
+                     (myKingSquare.File < enemyKingSquare.File
+                         ? m.TargetSquare.File > myKingSquare.File
+                         : m.TargetSquare.File < myKingSquare.File) ||
+                     (myKingSquare.Rank < enemyKingSquare.Rank
+                         ? m.TargetSquare.Rank > myKingSquare.Rank
+                         : m.TargetSquare.Rank < myKingSquare.Rank))
+                .ToArray();
+
+        return OneMoveSearch(board, kingMoves.Length > 0 ? kingMoves : moves);
+    }
 
     public Move Think(Board board, Timer timer)
     {
-        Move[] moves = board.GetLegalMoves().ToArray();
+        var moves = board.GetLegalMoves().ToArray();
         var movesNoMates = moves.Where(m => !MoveWouldStaleMate(m, board) && !MoveWouldLeadToMate(m, board)).ToArray();
         var allPieces = board.GetAllPieceLists().Aggregate(0, (i, list) => i + list.Count());
-        return allPieces < 10 ? LowPieceCountMoves(board, movesNoMates.Length > 0 ? movesNoMates : moves) : OneMoveSearch(board, movesNoMates.Length > 0 ?  movesNoMates : moves);
+        var move = allPieces switch
+        {
+            > 10 => OneMoveSearch(board, movesNoMates.Length > 0 ? movesNoMates : moves),
+            > 5 => LowPieceCountMoves(board, movesNoMates.Length > 0 ? movesNoMates : moves),
+            _ => VeryEndGameMoves(board, movesNoMates.Length > 0 ? movesNoMates : moves)
+        };
+        
+        return !move.IsPromotion ? move : new Move($"{move.StartSquare.Name}{move.TargetSquare.Name}q", board);
     }
+
 }
